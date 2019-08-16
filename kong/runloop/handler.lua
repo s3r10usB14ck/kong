@@ -33,19 +33,15 @@ local find         = string.find
 local lower        = string.lower
 local fmt          = string.format
 local ngx          = ngx
-local arg          = ngx.arg
 local var          = ngx.var
 local log          = ngx.log
 local exit         = ngx.exit
 local header       = ngx.header
-local ngx_now      = ngx.now
 local timer_at     = ngx.timer.at
 local timer_every  = ngx.timer.every
 local re_match     = ngx.re.match
 local re_find      = ngx.re.find
-local update_time  = ngx.update_time
 local subsystem    = ngx.config.subsystem
-local start_time   = ngx.req.start_time
 local clear_header = ngx.req.clear_header
 local starttls     = ngx.req.starttls -- luacheck: ignore
 local unpack       = unpack
@@ -947,8 +943,6 @@ return {
   },
   rewrite = {
     before = function(ctx)
-      ctx.KONG_REWRITE_START = get_now()
-
       -- special handling for proxy-authorization and te headers in case
       -- the plugin(s) want to specify them (store the original)
       ctx.http_proxy_authorization = var.http_proxy_authorization
@@ -956,9 +950,6 @@ return {
 
       mesh.rewrite(ctx)
     end,
-    after = function(ctx)
-      ctx.KONG_REWRITE_TIME = get_now() - ctx.KONG_REWRITE_START -- time spent in Kong's rewrite_by_lua
-    end
   },
   preread = {
     before = function(ctx)
@@ -1007,8 +998,6 @@ return {
         return exit(ERROR)
       end
 
-      ctx.KONG_PREREAD_START = get_now()
-
       local route = match_t.route
       local service = match_t.service
       local upstream_url_t = match_t.upstream_url_t
@@ -1040,15 +1029,7 @@ return {
         return kong.response.exit(errcode, body)
       end
 
-      local now = get_now()
-
-      -- time spent in Kong's preread_by_lua
-      ctx.KONG_PREREAD_TIME     = now - ctx.KONG_PREREAD_START
-      ctx.KONG_PREREAD_ENDED_AT = now
-      -- time spent in Kong before sending the request to upstream
-      -- start_time() is kept in seconds with millisecond resolution.
-      ctx.KONG_PROXY_LATENCY   = now - start_time() * 1000
-      ctx.KONG_PROXIED         = true
+      ctx.KONG_PROXIED = true
     end
   },
   access = {
@@ -1063,8 +1044,6 @@ return {
       end
 
       -- routing request
-
-      ctx.KONG_ACCESS_START = get_now()
 
       local match_t = router.exec()
       if not match_t then
@@ -1383,33 +1362,7 @@ return {
         clear_header("Proxy-Authorization")
       end
 
-      local now = get_now()
-
-      -- time spent in Kong's access_by_lua
-      ctx.KONG_ACCESS_TIME     = now - ctx.KONG_ACCESS_START
-      ctx.KONG_ACCESS_ENDED_AT = now
-      -- time spent in Kong before sending the request to upstream
-      -- start_time() is kept in seconds with millisecond resolution.
-      ctx.KONG_PROXY_LATENCY   = now - start_time() * 1000
-      ctx.KONG_PROXIED         = true
-    end
-  },
-  balancer = {
-    before = function(ctx)
-      local balancer_data = ctx.balancer_data
-      local current_try = balancer_data.tries[balancer_data.try_count]
-      current_try.balancer_start = get_now()
-    end,
-    after = function(ctx)
-      local balancer_data = ctx.balancer_data
-      local current_try = balancer_data.tries[balancer_data.try_count]
-
-      -- record try-latency
-      local try_latency = get_now() - current_try.balancer_start
-      current_try.balancer_latency = try_latency
-
-      -- record overall latency
-      ctx.KONG_BALANCER_TIME = (ctx.KONG_BALANCER_TIME or 0) + try_latency
+      ctx.KONG_PROXIED = true
     end
   },
   header_filter = {
@@ -1417,11 +1370,6 @@ return {
       if not ctx.KONG_PROXIED then
         return
       end
-
-      local now = get_now()
-      -- time spent waiting for a response from upstream
-      ctx.KONG_WAITING_TIME             = now - ctx.KONG_ACCESS_ENDED_AT
-      ctx.KONG_HEADER_FILTER_STARTED_AT = now
 
       -- clear hop-by-hop response headers:
       for _, header_name in csv(var.upstream_http_connection) do
@@ -1486,23 +1434,6 @@ return {
         else
           header[constants.HEADERS.SERVER] = nil
         end
-      end
-    end
-  },
-  body_filter = {
-    after = function(ctx)
-      if not arg[2] then
-        return
-      end
-
-      local now = get_now()
-      ctx.KONG_BODY_FILTER_ENDED_AT = now
-
-      if ctx.KONG_PROXIED then
-        -- time spent receiving the response (header_filter + body_filter)
-        -- we could use $upstream_response_time but we need to distinguish the waiting time
-        -- from the receiving time in our logging plugins (especially ALF serializer).
-        ctx.KONG_RECEIVE_TIME = now - ctx.KONG_HEADER_FILTER_STARTED_AT
       end
     end
   },
