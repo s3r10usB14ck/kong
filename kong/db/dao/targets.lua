@@ -280,7 +280,16 @@ function _TARGETS:page_for_upstream_with_health(upstream_pk, ...)
     ngx.log(ngx.ERR, "failed getting upstream health: ", err)
   end
 
+  local upstream_hostname
+  local upstream = balancer.get_upstream_by_id(upstream_pk.id)
+  if upstream then
+    upstream_hostname = upstream.hostname
+  end
+
   for _, target in ipairs(targets) do
+    local health_info_idx = upstream_hostname and
+      (upstream_hostname .. ":" .. string.match(target.target, "^.-:(%d+)$")) or
+      target.target
     -- In case of DNS errors when registering a target,
     -- that error happens inside lua-resty-dns-client
     -- and the end-result is that it just doesn't launch the callback,
@@ -290,12 +299,12 @@ function _TARGETS:page_for_upstream_with_health(upstream_pk, ...)
     -- Note that lua-resty-dns-client does retry by itself,
     -- meaning that if DNS is down and it eventually resumes working, the
     -- library will issue the callback and the target will change state.
-    if health_info[target.target] ~= nil and
-      #health_info[target.target].addresses > 0 then
+    if health_info[health_info_idx] ~= nil and
+      #health_info[health_info_idx].addresses > 0 then
       target.health = "HEALTHCHECKS_OFF"
       -- If any of the target addresses are healthy, then the target is
       -- considered healthy.
-      for _, address in ipairs(health_info[target.target].addresses) do
+      for _, address in ipairs(health_info[health_info_idx].addresses) do
         if address.health == "HEALTHY" then
           target.health = "HEALTHY"
           break
@@ -307,7 +316,7 @@ function _TARGETS:page_for_upstream_with_health(upstream_pk, ...)
     else
       target.health = "DNS_ERROR"
     end
-    target.data = health_info[target.target]
+    target.data = health_info[health_info_idx]
   end
 
   return targets, nil, nil, next_offset
@@ -328,9 +337,10 @@ function _TARGETS:select_by_upstream_filter(upstream_pk, filter, options)
 end
 
 
-function _TARGETS:post_health(upstream, target, address, is_healthy)
+function _TARGETS:post_health(upstream_pk, target, address, is_healthy)
+  local upstream = balancer.get_upstream_by_id(upstream_pk.id)
   local host_addr = utils.normalize_ip(target.target)
-  local hostname = utils.format_host(host_addr.host)
+  local hostname = upstream.hostname or utils.format_host(host_addr.host)
   local ip
   local port
 

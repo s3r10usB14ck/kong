@@ -164,15 +164,22 @@ local function apply_history(rb, history, start)
 
   for i = start, #history do
     local target = history[i]
+    local hostname = target.name
+    if history[i].upstream then
+      local upstream = get_upstream_by_id(history[i].upstream.id)
+      if upstream and upstream.hostname then
+        hostname = upstream.hostname
+      end
+    end
 
     if target.weight > 0 then
-      assert(rb:addHost(target.name, target.port, target.weight))
+      assert(rb:addHost(hostname, target.port, target.weight))
     else
-      assert(rb:removeHost(target.name, target.port))
+      assert(rb:removeHost(hostname, target.port))
     end
 
     target_histories[rb][i] = {
-      name = target.name,
+      name = hostname,
       port = target.port,
       weight = target.weight,
       order = target.order,
@@ -868,7 +875,11 @@ local function execute(target, ctx)
 
   target.ip = ip
   target.port = port
-  target.hostname = hostname
+  if upstream and upstream.hostname ~= nil then
+    target.hostname = upstream.hostname
+  else
+    target.hostname = hostname
+  end
   return true
 end
 
@@ -1014,6 +1025,7 @@ return {
   subscribe_to_healthcheck_events = subscribe_to_healthcheck_events,
   unsubscribe_from_healthcheck_events = unsubscribe_from_healthcheck_events,
   get_upstream_health = get_upstream_health,
+  get_upstream_by_id = get_upstream_by_id,
 
   -- ones below are exported for test purposes only
   _create_balancer = create_balancer,
