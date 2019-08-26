@@ -127,10 +127,17 @@ local function build_queries(self)
   end
 
   if schema.ttl == true then
-    -- XXX: cassandra cannot get TTL from an id. Maybe get something else
-    -- that is not endpoint_key, like a random field from schema.fields that
-    -- _is not_ a primary key!
-    select_columns = select_columns .. fmt(", TTL(%s) as ttl", schema.endpoint_key)
+    -- XXX: cassandra cannot get TTL from an id. Try to get any field that
+    -- is not an id. There must be a better way for this:
+    local function get_any_field()
+      for name, field in schema:each_field() do
+        if name ~= schema.primary_key[1] then
+          return name
+        end
+      end
+      return nil
+    end
+    select_columns = select_columns .. fmt(", TTL(%s) as ttl", get_any_field())
   end
 
   if partitioned then
