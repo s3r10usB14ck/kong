@@ -126,6 +126,13 @@ local function build_queries(self)
     return nil, err
   end
 
+  if schema.ttl == true then
+    -- XXX: cassandra cannot get TTL from an id. Maybe get something else
+    -- that is not endpoint_key, like a random field from schema.fields that
+    -- _is not_ a primary key!
+    select_columns = select_columns .. fmt(", TTL(%s) as ttl", schema.endpoint_key)
+  end
+
   if partitioned then
     return {
       insert = fmt([[
