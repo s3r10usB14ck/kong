@@ -930,7 +930,7 @@ function Kong.handle_error()
   return kong_error_handlers(ngx)
 end
 
-function Kong.serve_admin_api(options)
+function Kong.admin_content(options)
   log_init_worker_errors()
 
   kong_global.set_phase(kong, PHASES.admin_api)
