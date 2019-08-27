@@ -329,6 +329,9 @@
                                  #   (in milliseconds) by Kong to process
                                  #   a request and run all plugins before
                                  #   sending a response.
+                                 # - `X-Kong-Admin-Latency`: Time taken
+                                 #   (in milliseconds) by Kong to process
+                                 #   an admin api request.
                                  # - `X-Kong-Upstream-Status`: The HTTP status
                                  #   code returned by the upstream service.
                                  #   This is particularly useful for clients to
@@ -338,8 +341,9 @@
                                  #   `Server` and `Via`.
                                  # - `latency_tokens`: Same as specifying
                                  #   `X-Kong-Proxy-Latency`,
-                                 #   `X-Kong-Upstream-Latency`, and
-                                 #   `X-Kong-Response-Latency`.
+                                 #   `X-Kong-Upstream-Latency`
+                                 #   `X-Kong-Response-Latency`,
+                                 #   `X-Kong-Admin-Latency`, and
                                  #
                                  # In addition to those, this value can be set
                                  # to `off`, which prevents Kong from injecting

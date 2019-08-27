@@ -40,6 +40,7 @@ local HEADER_KEY_TO_NAME = {
   [string.lower(HEADERS.PROXY_LATENCY)] = HEADERS.PROXY_LATENCY,
   [string.lower(HEADERS.UPSTREAM_LATENCY)] = HEADERS.UPSTREAM_LATENCY,
   [string.lower(HEADERS.RESPONSE_LATENCY)] = HEADERS.RESPONSE_LATENCY,
+  [string.lower(HEADERS.ADMIN_LATENCY)] = HEADERS.ADMIN_LATENCY,
   [string.lower(HEADERS.UPSTREAM_STATUS)] = HEADERS.UPSTREAM_STATUS,
 }
 
@@ -1038,6 +1039,7 @@ local function load(path, custom_conf, opts)
       enabled_headers[HEADERS.PROXY_LATENCY] = true
       enabled_headers[HEADERS.UPSTREAM_LATENCY] = true
       enabled_headers[HEADERS.RESPONSE_LATENCY] = true
+      enabled_headers[HEADERS.ADMIN_LATENCY] = true
     end
 
     conf.enabled_headers = setmetatable(enabled_headers, _nop_tostring_mt)

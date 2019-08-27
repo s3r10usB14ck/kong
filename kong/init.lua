@@ -931,6 +931,10 @@ function Kong.handle_error()
 end
 
 function Kong.admin_content(options)
+  local ctx = ngx.ctx
+
+  ctx.KONG_ADMIN_CONTENT_START = ctx.KONG_ADMIN_CONTENT_START or get_now_ms()
+
   log_init_worker_errors()
 
   kong_global.set_phase(kong, PHASES.admin_api)
@@ -943,10 +947,40 @@ function Kong.admin_content(options)
     header["Access-Control-Allow-Methods"] = "GET, HEAD, PUT, PATCH, POST, DELETE"
     header["Access-Control-Allow-Headers"] = "Content-Type"
 
+    ctx.KONG_ADMIN_CONTENT_ENDED_AT = get_now_ms()
+    ctx.KONG_ADMIN_CONTENT_TIME = ctx.KONG_ADMIN_CONTENT_ENDED_AT - ctx.KONG_ADMIN_CONTENT_START
+    ctx.KONG_ADMIN_LATENCY = ctx.KONG_ADMIN_CONTENT_ENDED_AT - start_time() * 1000
+
     return ngx.exit(204)
   end
 
-  return lapis.serve("kong.api")
+  lapis.serve("kong.api")
+
+  ctx.KONG_ADMIN_CONTENT_ENDED_AT = get_now_ms()
+  ctx.KONG_ADMIN_CONTENT_TIME = ctx.KONG_ADMIN_CONTENT_ENDED_AT - ctx.KONG_ADMIN_CONTENT_START
+  ctx.KONG_ADMIN_LATENCY = ctx.KONG_ADMIN_CONTENT_ENDED_AT - start_time() * 1000
+end
+
+function Kong.admin_header_filter()
+  local ctx = ngx.ctx
+
+  ctx.KONG_ADMIN_HEADER_FILTER_START = ctx.KONG_ADMIN_HEADER_FILTER_START or get_now_ms()
+
+  if ctx.KONG_ADMIN_CONTENT_START and not ctx.KONG_ADMIN_CONTENT_ENDED_AT then
+    ctx.KONG_ADMIN_CONTENT_ENDED_AT = ctx.KONG_ADMIN_HEADER_FILTER_START
+    ctx.KONG_ADMIN_CONTENT_TIME = ctx.KONG_ADMIN_CONTENT_ENDED_AT - ctx.KONG_ADMIN_CONTENT_START
+  end
+
+  if not ctx.KONG_ADMIN_LATENCY then
+    ctx.KONG_ADMIN_LATENCY = ctx.KONG_ADMIN_HEADER_FILTER_START - start_time() * 1000
+  end
+
+  if kong.configuration.enabled_headers[constants.HEADERS.ADMIN_LATENCY] then
+    header[constants.HEADERS.ADMIN_LATENCY] = ctx.KONG_ADMIN_LATENCY
+  end
+
+  ctx.KONG_ADMIN_HEADER_FILTER_ENDED_AT = get_now_ms()
+  ctx.KONG_ADMIN_HEADER_FILTER_TIME = ctx.KONG_ADMIN_HEADER_FILTER_ENDED_AT - ctx.KONG_ADMIN_HEADER_FILTER_START
 end
 
 

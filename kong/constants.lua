@@ -76,6 +76,7 @@ return {
     PROXY_LATENCY = "X-Kong-Proxy-Latency",
     UPSTREAM_LATENCY = "X-Kong-Upstream-Latency",
     RESPONSE_LATENCY = "X-Kong-Response-Latency",
+    ADMIN_LATENCY = "X-Kong-Admin-Latency",
     UPSTREAM_STATUS = "X-Kong-Upstream-Status",
     CONSUMER_ID = "X-Consumer-ID",
     CONSUMER_CUSTOM_ID = "X-Consumer-Custom-ID",
