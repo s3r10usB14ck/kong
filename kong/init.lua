@@ -621,12 +621,6 @@ function Kong.rewrite()
   ctx.KONG_REWRITE_START = ctx.KONG_REWRITE_START or get_now_ms()
 
   local is_https = var.https == "on"
-  if is_https then
-    ctx.KONG_CERTIFICATE_START = ctx.KONG_CERTIFICATE_START or (start_time() * 1000)
-    ctx.KONG_CERTIFICATE_ENDED_AT = ctx.KONG_REWRITE_START
-    ctx.KONG_CERTIFICATE_TIME = ctx.KONG_CERTIFICATE_ENDED_AT - ctx.KONG_CERTIFICATE_START
-  end
-
   if not is_https then
     log_init_worker_errors()
   end
@@ -823,28 +817,29 @@ function Kong.header_filter()
 
   ctx.KONG_HEADER_FILTER_START = ctx.KONG_HEADER_FILTER_START or get_now_ms()
 
-  if ctx.KONG_REWRITE_START and not ctx.KONG_REWRITE_ENDED_AT then
-    ctx.KONG_REWRITE_ENDED_AT = ctx.KONG_HEADER_FILTER_START
-    ctx.KONG_REWRITE_TIME = ctx.KONG_REWRITE_ENDED_AT - ctx.KONG_REWRITE_START
-  end
-
-  if ctx.KONG_ACCESS_START and not ctx.KONG_ACCESS_ENDED_AT then
-    ctx.KONG_ACCESS_ENDED_AT = ctx.KONG_HEADER_FILTER_START
-    ctx.KONG_ACCESS_TIME = ctx.KONG_ACCESS_ENDED_AT - ctx.KONG_ACCESS_START
-  end
-
   if ctx.KONG_BALANCER_START and not ctx.KONG_BALANCER_ENDED_AT then
     ctx.KONG_BALANCER_ENDED_AT = ctx.KONG_HEADER_FILTER_START
     ctx.KONG_BALANCER_TIME = ctx.KONG_BALANCER_ENDED_AT - ctx.KONG_BALANCER_START
   end
 
+  if ctx.KONG_ACCESS_START and not ctx.KONG_ACCESS_ENDED_AT then
+    ctx.KONG_ACCESS_ENDED_AT = ctx.KONG_BALANCER_START or ctx.KONG_HEADER_FILTER_START
+    ctx.KONG_ACCESS_TIME = ctx.KONG_ACCESS_ENDED_AT - ctx.KONG_ACCESS_START
+  end
+
+  if ctx.KONG_REWRITE_START and not ctx.KONG_REWRITE_ENDED_AT then
+    ctx.KONG_REWRITE_ENDED_AT = ctx.KONG_ACCESS_START or ctx.KONG_BALANCER_START or ctx.KONG_HEADER_FILTER_START
+    ctx.KONG_REWRITE_TIME = ctx.KONG_REWRITE_ENDED_AT - ctx.KONG_REWRITE_START
+  end
+
   if ctx.KONG_PROXIED then
     if not ctx.KONG_PROXY_LATENCY then
+      -- time spent waiting for a response from upstream
       ctx.KONG_PROXY_LATENCY = ctx.KONG_HEADER_FILTER_START - start_time() * 1000
     end
   else
-    -- time spent waiting for a response from upstream
-    ctx.KONG_WAITING_TIME = ctx.KONG_HEADER_FILTER_START - ctx.KONG_ACCESS_ENDED_AT
+    ctx.KONG_WAITING_TIME = ctx.KONG_HEADER_FILTER_START - (ctx.KONG_ACCESS_ENDED_AT or
+                                                            ctx.KONG_HEADER_FILTER_START)
 
     if not ctx.KONG_RESPONSE_LATENCY then
       ctx.KONG_RESPONSE_LATENCY = ctx.KONG_HEADER_FILTER_START - start_time() * 1000
@@ -909,11 +904,12 @@ function Kong.log()
     if ctx.KONG_BODY_FILTER_START and not ctx.KONG_BODY_FILTER_ENDED_AT then
       ctx.KONG_BODY_FILTER_ENDED_AT = ctx.KONG_LOG_START
       ctx.KONG_BODY_FILTER_TIME = ctx.KONG_BODY_FILTER_ENDED_AT - ctx.KONG_BODY_FILTER_START
-
-      if ctx.KONG_PROXIED then
-        ctx.KONG_RECEIVE_TIME = ctx.KONG_BODY_FILTER_ENDED_AT - ctx.KONG_HEADER_FILTER_START
-      end
     end
+
+    if ctx.KONG_PROXIED and not ctx.KONG_RECEIVE_TIME then
+      ctx.KONG_RECEIVE_TIME = ctx.KONG_BODY_FILTER_ENDED_AT - ctx.KONG_HEADER_FILTER_START
+    end
+
   end
 
   kong_global.set_phase(kong, PHASES.log)
